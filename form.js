@@ -17,7 +17,7 @@
 
   // simple uid counter for input IDs
   let __uid = 0;
-  const uid = (prefix='f') => `${prefix}_${(++__uid).toString(36)}`;
+  const uid = (prefix = 'f') => `${prefix}_${(++__uid).toString(36)}`;
 
   // Heuristik für iPad-freundliche Tastatur
   const applyInputHints = (input, name, type) => {
@@ -523,7 +523,7 @@
 Der Mieter wurde darüber informiert, dass der Keller nicht zum Abstellen feuchteempfindlicher Gegenstände geeignet ist. Eine Haftung durch den Vermieter bei evtl. auftretenden Schäden ist ausgeschlossen.
 
 Die Wohnungsgeberbescheinigung wurde heute am Tag der Übergabe an den Mieter übergeben. 
-Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. MwSt. fällig.`;
+Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. MwSt. fällig.`;
 
       // Form-Daten einsammeln
       const fd = new FormData(form);
@@ -547,7 +547,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
           const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
           logoImg = await pdf.embedPng(bytes);
         } else {
-          const res = await fetch('./img/logo-test.png');
+          const res = await fetch('./img/logo.png');
           if (res.ok) {
             const bytes = await res.arrayBuffer();
             logoImg = await pdf.embedPng(bytes);
@@ -564,14 +564,27 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
       let cursorY = PAGE_H - MARGIN;
 
       // Helpers
-      const textW = (t, size = 10, bold = false) => (bold ? fontBold : fontRegular).widthOfTextAtSize(t, size);
-      const drawText = (t, x, y, size = 10, color = COLOR_TEXT, bold = false) => page.drawText(t, { x, y, size, font: bold ? fontBold : fontRegular, color });
+      const textW = (t, size = 10, bold = false) =>
+        (bold ? fontBold : fontRegular).widthOfTextAtSize(sanitize(t), size);
+
+      const drawText = (t, x, y, size = 10, color = COLOR_TEXT, bold = false) =>
+        page.drawText(sanitize(t), { x, y, size, font: bold ? fontBold : fontRegular, color });
+
+      const sanitize = (s) => String(s ?? '')
+        .replace(/\r\n?/g, '\n')           // normalisiere CRLF
+        .replace(/\u20AC/g, 'EUR')         // € -> EUR
+        .replace(/[\u2018\u2019]/g, "'")   // ’‘ -> '
+        .replace(/[\u201C\u201D]/g, '"')   // ”“ -> "
+        .replace(/\u00A0/g, ' ')           // NBSP -> Space
+        .replace(/[\x00-\x09\x0B-\x1F]/g, ''); // Control-Chars außer \n raus
+
+
       const wrap = (txt, maxW, size = 10, bold = false) => {
-        const paras = String(txt ?? '').replace(/\\r\\n?/g, '\\n').split('\\n');
+        const paras = sanitize(txt).split('\n'); // WICHTIG: nach sanitize
         const out = [];
         for (const para of paras) {
           if (para === '') { out.push(''); continue; }
-          const words = para.split(/\\s+/);
+          const words = para.split(/\s+/);
           let line = '';
           for (const w of words) {
             const test = line ? line + ' ' + w : w;
@@ -582,6 +595,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
         }
         return out;
       };
+
       const drawHeader = () => {
         page.drawRectangle({ x: 0, y: PAGE_H - 6, width: PAGE_W, height: 6, color: COLOR_PRIMARY });
         if (logoImg) {
@@ -645,7 +659,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
       };
       const measureKVTableHeight = rows => rows.reduce((s, [a, b]) => s + measureRowH(a, b), 0) + 8;
 
-      
+
       const drawSectionHeader = (title) => {
         const h = 22;
         ensureSpace(h + 10);
@@ -808,7 +822,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
       const rawDate = data['datum'];
       let header = 'Dresden, den .............................';
       if (asStr(rawDate)) {
-        try { const d = new Date(rawDate); header = `Dresden, den ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; } catch {}
+        try { const d = new Date(rawDate); header = `Dresden, den ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; } catch { }
       }
 
       const fieldH = 90, gap = 16, halfW = (PAGE_W - 2 * MARGIN - gap) / 2;
@@ -851,7 +865,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 € zzgl. Mw
       const a = document.createElement('a');
       a.href = url; a.download = 'Wohnungsübergabeprotokoll.pdf';
       document.body.appendChild(a); a.click(); a.remove();
-      try { URL.revokeObjectURL(url); } catch {}
+      try { URL.revokeObjectURL(url); } catch { }
     } catch (err) {
       console.error('PDF-Fehler:', err);
       alert('PDF-Erstellung fehlgeschlagen. Siehe Konsole für Details.');
