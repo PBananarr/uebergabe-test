@@ -1,4 +1,4 @@
-const CACHE_NAME = 'übergabe-test-cache-v2.0.1.';
+const CACHE_NAME = 'übergabe-test-cache-v2.0.2.';
 const ASSETS = [
   './',
   './index.html',
@@ -66,4 +66,5 @@ self.addEventListener('fetch', (event) => {
     }
   })());
 });
+
 
