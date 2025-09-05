@@ -611,9 +611,16 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
           const LOGO_H = 40;
           const scale = LOGO_H / logoImg.height;
           const LOGO_W = logoImg.width * scale;
+          // Bereich, in dem das Logo zentriert werden soll:
+          const contentTop    = PAGE_H - MARGIN - 6;   // etwas unter dem oberen Balken
+          const contentBottom = PAGE_H - MARGIN - 28;  // die Trennlinie im Header
+
+          // Vertikal mittig platzieren:
+          const yCentered = (contentTop + contentBottom - LOGO_H) / 2;
+      
           page.drawImage(logoImg, {
-            x: MARGIN,
-            y: PAGE_H - MARGIN - LOGO_H - 28,
+            x: MARGIN,            // links bleibt gleich
+            y: yCentered,         // <-- neu: zentriert zwischen oben/unten
             width: LOGO_W,
             height: LOGO_H
           });
