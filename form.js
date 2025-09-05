@@ -619,9 +619,12 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
           // Grobe metrische Annahmen für Helvetica:
           const ASCENT = 0.8, DESCENT = 0.2;      // ~80% hoch, ~20% tief
           const titleCenterY = titleBaselineY + (ASCENT - DESCENT) * tSize / 2 - DESCENT * tSize;
+
+         // Feinjustierung: positiver Wert verschiebt nach oben
+          const LOGO_OFFSET_Y = 3;   // ← hier 2–4 px ausprobieren
         
           // Logo so platzieren, dass sein Mittelpunkt = Titelmittelpunkt
-          const yLogo = titleCenterY - LOGO_H / 2;
+          const yLogo = titleCenterY - LOGO_H / 2 + LOGO_OFFSET_Y;
         
           page.drawImage(logoImg, {
             x: MARGIN,         // links bleibt
