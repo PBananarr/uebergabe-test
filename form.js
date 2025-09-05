@@ -608,7 +608,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
       const drawHeader = () => {
         page.drawRectangle({ x: 0, y: PAGE_H - 6, width: PAGE_W, height: 6, color: COLOR_PRIMARY });
        if (logoImg) {
-          const LOGO_H = 20;
+          const LOGO_H = 40;
           const scale  = LOGO_H / logoImg.height;
           const LOGO_W = logoImg.width * scale;
         
