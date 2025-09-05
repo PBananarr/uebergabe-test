@@ -1,4 +1,3 @@
-// form.js (robust, iPad-/Offline-optimiert, Mehrfachauswahl erlaubt)
 (function () {
   // ---------- Globals / Refs ----------
   const sections = Array.isArray(window.form_sections) ? window.form_sections : [];
@@ -19,42 +18,34 @@
   let __uid = 0;
   const uid = (prefix = 'f') => `${prefix}_${(++__uid).toString(36)}`;
 
-  // Heuristik für iPad-freundliche Tastatur
-// iPad-/Tastatur-Hilfen + dezimale Eingaben
-const applyInputHints = (input, name, type) => {
-  const nm = String(name || '').toLowerCase();
+  // iPad-/Tastatur-Hilfen + dezimale Eingaben
+  const applyInputHints = (input, name, type) => {
+    const nm = String(name || '').toLowerCase();
 
-  // Felder, die dezimale Eingaben erlauben sollen (Komma ODER Punkt)
-  const isDecimal =
-    /betrag|summe|rate|eur|stand/.test(nm) ||             // generisch: *betrag, *summe, *rate, *eur, *stand
-    /_stand$/.test(nm);                                   // z.B. warmwasser_stand, strom_stand
+    const isDecimal =
+      /betrag|summe|rate|eur|stand/.test(nm) ||             // generisch: *betrag, *summe, *rate, *eur, *stand
+      /_stand$/.test(nm);                                   // z.B. warmwasser_stand, strom_stand
 
-  // Felder, die rein ganzzahlig sind (Zählwerte, IDs)
-  const isInteger =
-    /^anzahl_/.test(nm) ||                                // z.B. anzahl_hausschluessel
-    /(_nr$|_nummer$)/.test(nm);                           // z.B. hausschluessel_nummer
+    // Felder, die rein ganzzahlig sind (Zählwerte, IDs)
+    const isInteger =
+      /^anzahl_/.test(nm) ||                                // z.B. anzahl_hausschluessel
+      /(_nr$|_nummer$)/.test(nm);                           // z.B. hausschluessel_nummer
 
-  // 1) Dezimalfelder: iPad-„Dezimal“-Tastatur, KEIN restriktives pattern (damit . und , gehen)
-  if (isDecimal) {
-    // wichtig: keine 'type="number"' erzwingen, damit Komma/Punkt erlaubt sind
-    if (input.tagName === 'INPUT' && input.type === 'number') input.type = 'text';
-    input.inputMode = 'decimal';       // iOS zeigt , an; . lässt sich trotzdem eingeben
-    input.autocomplete = 'off';
-    return;
-  }
+    if (isDecimal) {
+      if (input.tagName === 'INPUT' && input.type === 'number') input.type = 'text';
+      input.inputMode = 'decimal';       // iOS zeigt , an; . lässt sich trotzdem eingeben
+      input.autocomplete = 'off';
+      return;
+    }
 
-  // 2) Integerfelder: echte numerische Tastatur + pattern für reine Ziffern
-  if (type === 'number' || isInteger) {
-    input.inputMode = 'numeric';
-    input.pattern = '\\d*';
-    input.autocomplete = 'off';
-    return;
-  }
-
-  // 3) Fallback für sonstige Felder:
-  // nichts setzen – Standard bleibt (freie Texteingabe)
-};
-
+    // 2) Integerfelder: echte numerische Tastatur + pattern für reine Ziffern
+    if (type === 'number' || isInteger) {
+      input.inputMode = 'numeric';
+      input.pattern = '\\d*';
+      input.autocomplete = 'off';
+      return;
+    }
+  };
 
   const addLabelInput = (wrap, label, name, type = 'text', preset, options) => {
     const row = el('div', 'form-group');

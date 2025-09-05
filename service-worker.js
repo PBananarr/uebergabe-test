@@ -1,4 +1,4 @@
-const CACHE_NAME = 'übergabe-test-cache-v1.0.3.';
+const CACHE_NAME = 'übergabe-test-cache-v2.0.0.';
 const ASSETS = [
   './',
   './index.html',
