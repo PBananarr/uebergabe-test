@@ -621,7 +621,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
           const titleCenterY = titleBaselineY + (ASCENT - DESCENT) * tSize / 2 - DESCENT * tSize;
 
          // Feinjustierung: positiver Wert verschiebt nach oben
-          const LOGO_OFFSET_Y = 3;   // ← hier 2–4 px ausprobieren
+          const LOGO_OFFSET_Y = 6;
         
           // Logo so platzieren, dass sein Mittelpunkt = Titelmittelpunkt
           const yLogo = titleCenterY - LOGO_H / 2 + LOGO_OFFSET_Y;
