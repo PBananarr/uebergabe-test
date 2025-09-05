@@ -607,24 +607,30 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
 
       const drawHeader = () => {
         page.drawRectangle({ x: 0, y: PAGE_H - 6, width: PAGE_W, height: 6, color: COLOR_PRIMARY });
-        if (logoImg) {
-          const LOGO_H = 40;
-          const scale = LOGO_H / logoImg.height;
+       if (logoImg) {
+          const LOGO_H = 20;
+          const scale  = LOGO_H / logoImg.height;
           const LOGO_W = logoImg.width * scale;
-          // Bereich, in dem das Logo zentriert werden soll:
-          const contentTop    = PAGE_H - MARGIN - 6;   // etwas unter dem oberen Balken
-          const contentBottom = PAGE_H - MARGIN - 28;  // die Trennlinie im Header
-
-          // Vertikal mittig platzieren:
-          const yCentered = (contentTop + contentBottom - LOGO_H) / 2;
-      
+        
+          // Titel-Geometrie
+          const tSize = 18;
+          const titleBaselineY = PAGE_H - MARGIN - 10;
+        
+          // Grobe metrische Annahmen für Helvetica:
+          const ASCENT = 0.8, DESCENT = 0.2;      // ~80% hoch, ~20% tief
+          const titleCenterY = titleBaselineY + (ASCENT - DESCENT) * tSize / 2 - DESCENT * tSize;
+        
+          // Logo so platzieren, dass sein Mittelpunkt = Titelmittelpunkt
+          const yLogo = titleCenterY - LOGO_H / 2;
+        
           page.drawImage(logoImg, {
-            x: MARGIN,            // links bleibt gleich
-            y: yCentered,         // <-- neu: zentriert zwischen oben/unten
+            x: MARGIN,         // links bleibt
+            y: yLogo,
             width: LOGO_W,
             height: LOGO_H
           });
         }
+        
         const title = 'Wohnungsübergabeprotokoll', tSize = 18, tW = textW(title, tSize, true);
         drawText(title, PAGE_W - MARGIN - tW, PAGE_H - MARGIN - 10, tSize, COLOR_PRIMARY_DARK, true);
         const y = PAGE_H - MARGIN - 28;
