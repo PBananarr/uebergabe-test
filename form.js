@@ -4,8 +4,6 @@
   const root = document.getElementById('sections-root');
   const form = document.getElementById('uebergabe-form');
   const out = document.getElementById('submitted');
-  const saveKeyData = 'uebergabe_form_data';
-  const saveKeyLayout = 'uebergabe_form_layout';
 
   // ---------- Utils ----------
   const el = (tag, cls) => {
@@ -17,6 +15,9 @@
   // simple uid counter for input IDs
   let __uid = 0;
   const uid = (prefix = 'f') => `${prefix}_${(++__uid).toString(36)}`;
+
+  // Strukturänderungen (Zeile hinzugefügt/entfernt, Reset) an records.js melden -> Autosave
+  const notifyChanged = () => document.dispatchEvent(new CustomEvent('abnahme:changed'));
 
   // iPad-/Tastatur-Hilfen + dezimale Eingaben
   const applyInputHints = (input, name, type) => {
@@ -134,6 +135,121 @@
     return rm;
   };
 
+  // ---------- Dynamische Zeile erzeugen (Klick auf "+" ODER Wiederherstellung) ----------
+  // Jede erzeugte Zeile bekommt data-option, damit sie beim Zwischenspeichern
+  // erkannt und beim Laden identisch wieder aufgebaut werden kann.
+  const buildDynamicRow = (sectionIdx, optionName) => {
+    const section = sections[sectionIdx];
+    const container = document.getElementById(`fields-container-${sectionIdx}`);
+    if (!section || !container || !Array.isArray(section.options)) return null;
+
+    const opt = section.options.find(o => o.name === optionName);
+    if (!opt) return null;
+
+    const label = opt.label || optionName;
+
+    // --- Spezial: Weitere Räume ---
+    if ((section.title || '').trim() === 'Weitere Räume') {
+      const card = el('div', 'field-item');
+      card.dataset.option = optionName;
+      card.style.flexDirection = 'column';
+      card.style.alignItems = 'stretch';
+      card.setAttribute('role', 'group');
+
+      const head = el('div');
+      head.style.display = 'flex';
+      head.style.alignItems = 'center';
+      head.style.gap = '10px';
+
+      const strong = document.createElement('strong');
+      strong.textContent = label;
+      strong.id = uid('lbl');
+      head.appendChild(strong);
+
+      head.appendChild(makeRemoveBtn(() => { card.remove(); notifyChanged(); }));
+      card.appendChild(head);
+
+      (opt.fields || opt.subfields || []).forEach(f => {
+        addLabelInput(card, f.label, f.name, f.type, f.checked, f.options);
+      });
+
+      container.appendChild(card);
+      return card;
+    }
+
+    // --- Standard: Gruppe mit Subfeldern ---
+    if (opt.type === 'multi' && Array.isArray(opt.subfields) && opt.subfields.length) {
+      const group = el('div', 'field-item');
+      group.dataset.option = optionName;
+      group.setAttribute('role', 'group');
+
+      const strong = document.createElement('strong');
+      strong.textContent = label;
+      strong.id = uid('lbl');
+      group.appendChild(strong);
+
+      opt.subfields.forEach(sf => {
+        const lab = document.createElement('label');
+        const id = uid(sf.name || 'sf');
+        lab.textContent = sf.label;
+        lab.htmlFor = id;
+        group.appendChild(lab);
+
+        let input;
+        if (sf.type === 'checkbox') {
+          input = document.createElement('input');
+          input.type = 'checkbox';
+          if (sf.checked) input.checked = true;
+          input.style.width = 'auto';
+          input.setAttribute('aria-label', sf.label);
+        } else if (sf.type === 'textarea') {
+          input = document.createElement('textarea');
+        } else if (sf.type === 'select') {
+          input = document.createElement('select');
+          (sf.options || []).forEach(o2 => {
+            const o = document.createElement('option');
+            o.value = String(o2?.value ?? o2);
+            o.textContent = String(o2?.label ?? o2);
+            input.appendChild(o);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = sf.type || 'text';
+        }
+        input.name = sf.name;
+        input.id = id;
+        applyInputHints(input, sf.name, sf.type);
+        group.appendChild(input);
+      });
+
+      group.appendChild(makeRemoveBtn(() => { group.remove(); notifyChanged(); }));
+      container.appendChild(group);
+      return group;
+    }
+
+    // --- Einzel-Feld ---
+    const row = el('div', 'field-item');
+    row.dataset.option = optionName;
+    row.setAttribute('role', 'group');
+
+    const lab = document.createElement('label');
+    const id = uid(opt.name);
+    lab.textContent = label;
+    lab.htmlFor = id;
+    row.appendChild(lab);
+
+    const input = document.createElement('input');
+    input.name = opt.name;
+    input.type = opt.type || 'text';
+    input.id = id;
+    applyInputHints(input, input.name, input.type);
+    row.appendChild(input);
+
+    row.appendChild(makeRemoveBtn(() => { row.remove(); notifyChanged(); }));
+    container.appendChild(row);
+    return row;
+  };
+
   // ---------- Rendering ----------
   sections.forEach((section, i) => {
     const h2 = document.createElement('h2');
@@ -159,127 +275,8 @@
 
       if (addBtn) {
         addBtn.addEventListener('click', () => {
-          const optEl = select.selectedOptions[0];
-          if (!optEl || !optEl.value) return;
-
-          const sectionTitle = (select.dataset.sectionTitle || '').trim();
-          const type = optEl.dataset.type;
-          const label = optEl.textContent;
-          const subfields = optEl.dataset.subfields ? JSON.parse(optEl.dataset.subfields) : [];
-
-          // --- Spezial: Weitere Räume ---
-          if (sectionTitle === 'Weitere Räume') {
-            const card = el('div', 'field-item');
-            card.style.flexDirection = 'column';
-            card.style.alignItems = 'stretch';
-            card.setAttribute('role', 'group');
-            card.dataset.label = label; // für Layout-Persistenz
-
-            const head = el('div');
-            head.style.display = 'flex';
-            head.style.alignItems = 'center';
-            head.style.gap = '10px';
-
-            const strong = document.createElement('strong');
-            strong.textContent = label;
-            strong.id = uid('lbl');
-            head.appendChild(strong);
-
-            const removeRoomBtn = makeRemoveBtn(() => card.remove());
-            head.appendChild(removeRoomBtn);
-            card.appendChild(head);
-
-            // Felder aus option.fields rendern
-            const fields = Array.isArray(subfields) && subfields.length && subfields[0]?.label
-              ? subfields
-              : (optEl.dataset.fields ? JSON.parse(optEl.dataset.fields) : []);
-
-            let optionObj = null;
-            if (!fields.length && Array.isArray(section.options)) {
-              optionObj = section.options.find(o => o.name === optEl.value || o.label === label);
-            }
-            const finalFields = fields.length ? fields : (optionObj?.fields || []);
-
-            finalFields.forEach(f => {
-              addLabelInput(card, f.label, f.name, f.type, f.checked, f.options);
-            });
-
-            container.appendChild(card);
-            select.value = '';
-            return;
-          }
-
-          // --- Standard: Gruppe mit Subfeldern oder Einzel-Feld ---
-          if (type === 'multi' && Array.isArray(subfields) && subfields.length) {
-            const wrap = el('div', 'field-item');
-            wrap.setAttribute('role', 'group');
-            wrap.dataset.label = label; // für Layout-Persistenz
-            const strong = document.createElement('strong');
-            strong.textContent = label;
-            strong.id = uid('lbl');
-            wrap.appendChild(strong);
-
-            subfields.forEach(sf => {
-              const lab = document.createElement('label');
-              const id = uid(sf.name || 'sf');
-              lab.textContent = sf.label;
-              lab.htmlFor = id;
-              wrap.appendChild(lab);
-
-              let input;
-              if (sf.type === 'checkbox') {
-                input = document.createElement('input');
-                input.type = 'checkbox';
-                if (sf.checked) input.checked = true;
-                input.style.width = 'auto';
-                input.setAttribute('aria-label', sf.label);
-              } else if (sf.type === 'textarea') {
-                input = document.createElement('textarea');
-              } else if (sf.type === 'select') {
-                input = document.createElement('select');
-                (sf.options || []).forEach(opt => {
-                  const o = document.createElement('option');
-                  o.value = String(opt?.value ?? opt);
-                  o.textContent = String(opt?.label ?? opt);
-                  input.appendChild(o);
-                });
-              } else {
-                input = document.createElement('input');
-                input.type = sf.type || 'text';
-              }
-              input.name = sf.name;
-              input.id = id;
-              applyInputHints(input, sf.name, sf.type);
-              wrap.appendChild(input);
-            });
-
-            const rm = makeRemoveBtn(() => wrap.remove());
-            wrap.appendChild(rm);
-            container.appendChild(wrap);
-          } else {
-            const row = el('div', 'field-item');
-            row.setAttribute('role', 'group');
-            row.dataset.label = label; // für Layout-Persistenz
-
-            const lab = document.createElement('label');
-            const id = uid(optEl.value);
-            lab.textContent = label;
-            lab.htmlFor = id;
-            row.appendChild(lab);
-
-            const input = document.createElement('input');
-            input.name = optEl.value;
-            input.type = type || 'text';
-            input.id = id;
-            applyInputHints(input, input.name, input.type);
-            row.appendChild(input);
-
-            const rm = makeRemoveBtn(() => row.remove());
-            row.appendChild(rm);
-
-            container.appendChild(row);
-          }
-
+          if (!select.value) return;
+          if (buildDynamicRow(i, select.value)) notifyChanged();
           select.value = '';
         });
       }
@@ -376,134 +373,89 @@
     onChange(); // Initialzustand
   })();
 
-  // ---------- Speichern (Anzeige + LocalStorage) ----------
-  const saveBtn = document.getElementById('save-btn');
-  saveBtn?.addEventListener('click', () => {
-    const fd = new FormData(form);
-    const entries = {};
-    for (const [k, v] of fd.entries()) {
-      if (k in entries) {
-        // Mehrfachwerte zu Array
-        const curr = entries[k];
-        entries[k] = Array.isArray(curr) ? curr.concat([v]) : [curr, v];
-      } else {
-        entries[k] = v;
+  // ---------- Formular-Zustand: leeren / serialisieren / wiederherstellen ----------
+  const clearFormState = () => {
+    form.reset();
+    sections.forEach((_, i) => {
+      const c = document.getElementById(`fields-container-${i}`);
+      if (c) c.innerHTML = '';
+    });
+    form.querySelector('#maengel_dynamic_wrap')?.remove();
+    form.querySelector('#kaution_rate_wrap')?.remove();
+    if (out) out.style.display = 'none';
+  };
+
+  const serializeState = () => {
+    // Welche dynamischen Zeilen wurden hinzugefügt (in Reihenfolge)?
+    const dynamic = [];
+    sections.forEach((_, i) => {
+      const c = document.getElementById(`fields-container-${i}`);
+      if (!c) return;
+      [...c.children].forEach(rowEl => {
+        if (rowEl.dataset && rowEl.dataset.option) {
+          dynamic.push({ section: i, option: rowEl.dataset.option });
+        }
+      });
+    });
+
+    // Werte pro Feldname in DOM-Reihenfolge (Mehrfachfelder => mehrere Einträge)
+    const values = {};
+    form.querySelectorAll('input, textarea, select').forEach(inp => {
+      if (!inp.name) return;
+      const v = inp.type === 'checkbox' ? (inp.checked ? 'on' : '') : inp.value;
+      if (!values[inp.name]) values[inp.name] = [];
+      values[inp.name].push(v);
+    });
+
+    return { dynamic, values };
+  };
+
+  const restoreState = (state) => {
+    clearFormState();
+
+    (Array.isArray(state?.dynamic) ? state.dynamic : []).forEach(d => {
+      buildDynamicRow(d.section, d.option);
+    });
+
+    const values = state?.values || {};
+
+    // Erst die Auswahlfelder mit Folgefeldern setzen, damit die dynamischen
+    // Zusatzfelder (Mängel-Liste, Kautions-Rate) vor dem Befüllen existieren
+    ['ohne_beanstandungen', 'kaution_bezahlart'].forEach(name => {
+      const selEl = form.querySelector(`select[name="${name}"]`);
+      const vals = values[name];
+      if (selEl && Array.isArray(vals) && vals[0]) {
+        selEl.value = vals[0];
+        selEl.dispatchEvent(new Event('change'));
       }
-    }
-
-    // Checkbox-Lücken schließen
-    form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      if (!entries.hasOwnProperty(cb.name)) {
-        entries[cb.name] = cb.checked ? 'on' : '';
-      }
     });
 
-    // Layout-Metadaten aufnehmen (welche dynamischen Blöcke existieren)
-    const layout = {};
-    sections.forEach((section, i) => {
-      const cid = `fields-container-${i}`;
-      const items = [...document.querySelectorAll(`#${cid} .field-item`)];
-      if (!items.length) return;
-      layout[i] = items.map(it => it.dataset.label || it.querySelector('strong')?.textContent || '');
+    // Alle Werte in DOM-Reihenfolge zurückschreiben
+    const counters = {};
+    form.querySelectorAll('input, textarea, select').forEach(inp => {
+      if (!inp.name) return;
+      const arr = values[inp.name];
+      if (!Array.isArray(arr)) return;
+      const idx = counters[inp.name] = (counters[inp.name] ?? -1) + 1;
+      if (idx >= arr.length) return;
+      if (inp.type === 'checkbox') inp.checked = arr[idx] === 'on';
+      else inp.value = arr[idx];
     });
+  };
 
-    // Vorschau
-    const ul = document.createElement('ul');
-    Object.entries(entries).forEach(([k, v]) => {
-      const val = Array.isArray(v) ? v.join(', ') : v;
-      if (String(val).trim() === '') return;
-      const li = document.createElement('li');
-      li.textContent = `${k}: ${val}`;
-      ul.appendChild(li);
-    });
-
-    out.innerHTML = '<h2>Eingegebene Daten:</h2>';
-    out.appendChild(ul);
-    out.style.display = 'block';
-
-    try {
-      localStorage.setItem(saveKeyData, JSON.stringify(entries));
-      localStorage.setItem(saveKeyLayout, JSON.stringify(layout));
-    } catch (e) {
-      console.warn('Speichern fehlgeschlagen:', e);
-    }
-  });
+  // API für records.js (automatische Zwischenspeicherung + Vorgangsverwaltung)
+  window.UebergabeForm = {
+    serialize: serializeState,
+    restore: restoreState,
+    clearForm: clearFormState
+  };
 
   // ---------- Reset ----------
   document.getElementById('reset-btn')?.addEventListener('click', () => {
     if (!confirm('Alle Eingaben löschen?')) return;
-    form.reset();
-    [...root.querySelectorAll('[id^="fields-container-"]')].forEach(c => c.innerHTML = '');
-    out.style.display = 'none';
-    try {
-      localStorage.removeItem(saveKeyData);
-      localStorage.removeItem(saveKeyLayout);
-    } catch (e) { console.warn(e); }
-    document.querySelector('#maengel_dynamic_wrap')?.remove();
-    document.querySelector('#kaution_rate_wrap')?.remove();
+    clearFormState();
+    notifyChanged();
   });
-
-  // ---------- Laden (Layout zuerst, dann Werte) ----------
-  (function restore() {
-    // 1) Layout rekonstruieren (dynamische Blöcke)
-    try {
-      const layoutRaw = localStorage.getItem(saveKeyLayout);
-      const layout = layoutRaw ? JSON.parse(layoutRaw) : {};
-      Object.entries(layout).forEach(([i, labels]) => {
-        const sel = document.getElementById(`select-${i}`);
-        const addBtn = document.querySelector(`.add-btn[data-section="${i}"]`);
-        const section = sections[+i];
-        if (!sel || !addBtn || !section) return;
-
-        (labels || []).forEach(lbl => {
-          // Finde Option nach Label
-          const opt = [...sel.options].find(o => o.textContent === lbl);
-          if (opt) {
-            sel.value = opt.value;
-            addBtn.click(); // Block erzeugen
-          }
-        });
-      });
-    } catch (e) { console.warn('Layout-Restore fehlgeschlagen:', e); }
-
-    // 2) Werte restaurieren
-    try {
-      const raw = localStorage.getItem(saveKeyData);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-
-      // Set simple inputs first
-      form.querySelectorAll('input, textarea, select').forEach(inp => {
-        if (!inp.name) return;
-        if (inp.type === 'checkbox') {
-          inp.checked = data[inp.name] === 'on';
-        } else if (data[inp.name] != null) {
-          const val = data[inp.name];
-          if (Array.isArray(val)) {
-            // Mehrfachwerte – erster Wert in vorhandenes Feld, Rest bleiben ungesetzt (da separate Inputs)
-            inp.value = val[0];
-          } else {
-            inp.value = val;
-          }
-        }
-      });
-
-      // Sonderfälle sicherstellen (Mängel / Kaution) nach Wertsetzung
-      const selM = form.querySelector('select[name="ohne_beanstandungen"]');
-      if (selM) selM.dispatchEvent(new Event('change'));
-      const selK = form.querySelector('select[name="kaution_bezahlart"]');
-      if (selK) selK.dispatchEvent(new Event('change'));
-
-      // Nachträglich spezifische Werte für dynamisch erzeugte Felder zuweisen (Arrays)
-      Object.entries(data).forEach(([name, val]) => {
-        if (!Array.isArray(val)) return;
-        const inputs = [...form.querySelectorAll(`[name="${CSS.escape(name)}"]`)];
-        val.forEach((v, idx) => {
-          if (inputs[idx]) inputs[idx].value = v;
-        });
-      });
-    } catch (e) { console.warn('Werte-Restore fehlgeschlagen:', e); }
-  })();
 
   // ---------- Echte PDF mit pdf-lib (SAFE MODE) ----------
   document.getElementById('pdf-btn')?.addEventListener('click', async () => {
@@ -540,7 +492,7 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
       for (const [k, v] of fd.entries()) (k in data) ? (Array.isArray(data[k]) ? data[k].push(v) : data[k] = [data[k], v]) : (data[k] = v);
       const asStr = x => (x ?? '').toString().trim();
       const isOn = x => asStr(x).toLowerCase() === 'on';
-      const isISO = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(s);
+      const isISO = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
       const toDE = s => (isISO(s = asStr(s))) ? s.split('-').reverse().join('.') : s;
 
       // PDF + Standardfonts (keine externen Font/Logo-Loads)
@@ -882,15 +834,86 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
       drawSignBox(MARGIN + halfW + gap, topY, halfW, fieldH, 'Unterschrift des Mieters bzw. seines Bevollmächtigten');
       cursorY = topY - fieldH - 30;
 
-      // Footer + Download
+      // Footer zeichnen, dann Dokument EINMAL speichern (Basis für die Vorschau).
+      // Ein zweites save() desselben Dokuments ist browserabhängig fehleranfällig.
       drawFooterForAllPages(pdf, fontRegular);
-      const pdfBytes = await pdf.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'Wohnungsübergabeprotokoll.pdf';
-      document.body.appendChild(a); a.click(); a.remove();
-      try { URL.revokeObjectURL(url); } catch { }
+      let pdfBytes = await pdf.save();
+
+      // ===== Vorschau der fertigen PDF + Unterschriften erfassen =====
+      if (window.AbnahmeSignature) {
+        const sigBoxes = {
+          vermieter: { x: MARGIN, y: topY, w: halfW, h: fieldH },
+          mieter: { x: MARGIN + halfW + gap, y: topY, w: halfW, h: fieldH }
+        };
+
+        const sigs = await window.AbnahmeSignature.collect(pdfBytes);
+        if (sigs === null) return; // Abbrechen gedrückt -> keine PDF erzeugen
+
+        if (sigs.vermieter || sigs.mieter) {
+          // Unterschriften in eine frische Kopie exakt der Vorschau-Bytes einbetten
+          const signedDoc = await PDFDocument.load(pdfBytes);
+          const lastPage = signedDoc.getPage(signedDoc.getPageCount() - 1);
+
+          const placeSig = async (dataUrl, box) => {
+            if (!dataUrl) return;
+            const img = await signedDoc.embedPng(dataUrl);
+            const lineY = box.y - box.h + 26; // Signaturlinie (siehe drawSignBox)
+            const maxW = box.w - 44;
+            const maxH = 32;
+            const scale = Math.min(maxW / img.width, maxH / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+            lastPage.drawImage(img, {
+              x: box.x + (box.w - w) / 2,
+              y: lineY + 2, // direkt auf der Linie aufsitzend
+              width: w,
+              height: h
+            });
+          };
+
+          await placeSig(sigs.vermieter, sigBoxes.vermieter);
+          await placeSig(sigs.mieter, sigBoxes.mieter);
+          pdfBytes = await signedDoc.save();
+        }
+      }
+
+      // Dateiname mit Adresse/Datum (hilft in der Dateien-App bei mehreren Übergaben)
+      const fnSafe = s => asStr(s).replace(/[^\wäöüÄÖÜß\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60);
+      const filename = ['Wohnungsübergabeprotokoll',
+        fnSafe(data['strasse_hausnummer']),
+        fnSafe(data['wohnung_nr_etage_objekt']),
+        asStr(data['datum'])
+      ].filter(Boolean).join('_') + '.pdf';
+
+      // PDF im aktuellen Vorgang sichern (records.js), bevor sie den Nutzer erreicht
+      try {
+        document.dispatchEvent(new CustomEvent('abnahme:pdf', { detail: { bytes: pdfBytes, filename } }));
+      } catch (e) { }
+
+      // Bevorzugt das iOS-Teilen-Menü (Drucken / In Dateien sichern / Mail):
+      // die App bleibt dabei im Vordergrund und navigiert nicht zur PDF weg.
+      let ausgeliefert = false;
+      try {
+        const file = new File([pdfBytes], filename, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          ausgeliefert = true;
+        }
+      } catch (e) {
+        // AbortError = Nutzer hat das Teilen-Menü bewusst geschlossen -> kein Zwangs-Download
+        if (e && e.name === 'AbortError') ausgeliefert = true;
+      }
+
+      if (!ausgeliefert) {
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        // Spät freigeben: falls Safari die PDF im selben Tab öffnet, muss die
+        // URL beim Zurückgehen noch gültig sein
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { } }, 60000);
+      }
     } catch (err) {
       console.error('PDF-Fehler:', err);
       alert('PDF-Erstellung fehlgeschlagen. Siehe Konsole für Details.');

@@ -1,4 +1,3 @@
-// form_data.js (Labels korrigiert, Struktur identisch)
 window.form_sections = [
   {
     "title": "Allgemeine Daten",

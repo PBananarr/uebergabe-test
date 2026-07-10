@@ -1,15 +1,19 @@
-const CACHE_NAME = 'übergabe-test-cache-v2.0.1.';
+const CACHE_NAME = 'UEF-Version-1.1.0.';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './form.js',
   './form_data.js',
+  './records.js',
+  './signature.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './img/logo.png',
   './vendor/pdf-lib.min.js',
+  './vendor/pdfjs/pdf.min.js',
+  './vendor/pdfjs/pdf.worker.min.js',
   './fonts/DejaVuSans.ttf'
 ];
 

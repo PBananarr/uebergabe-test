@@ -59,7 +59,10 @@
     <h1>Wohnungsübergabeprotokoll</h1>
 
     <!-- Formular wird komplett durch JS gerendert -->
-    <form id="uebergabe-form">
+    <!-- autocomplete="off": verhindert, dass Safari beim Zurücknavigieren seine
+         eigene Formular-Wiederherstellung anwendet und die von der App
+         wiederhergestellten Werte überschreibt/leert -->
+    <form id="uebergabe-form" autocomplete="off">
       <div id="sections-root"></div>
 
       <div class="no-print" style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
@@ -74,10 +77,13 @@
     
   </div>
 
-  <!-- Reihenfolge wichtig: erst libs, dann Daten, dann Logik -->
+  <!-- Reihenfolge wichtig: erst libs, dann Daten, dann Logik, dann Vorgangsverwaltung -->
   <script src="./vendor/pdf-lib.min.js"></script>
+  <script src="./vendor/pdfjs/pdf.min.js"></script>
+  <script src="./signature.js"></script>
   <script src="./form_data.js"></script>
   <script src="./form.js"></script>
+  <script src="./records.js"></script>
 
   <script>
     // PWA Service Worker
