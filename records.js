@@ -278,28 +278,18 @@
     }
   });
 
-  btnPdf.addEventListener('click', async () => {
+  btnPdf.addEventListener('click', () => {
     if (!current || !current.pdf || !current.pdf.bytes) return;
     const filename = current.pdf.filename || 'Wohnungsübergabeprotokoll.pdf';
 
-    // Wie beim Erzeugen: bevorzugt Teilen-Menü, damit die App nicht wegnavigiert
-    try {
-      const file = new File([current.pdf.bytes], filename, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
-        return;
-      }
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;
-    }
-
+    // Wie beim Erzeugen: PDF direkt anzeigen/herunterladen; gespeichert wird
+    // über das Teilen-Menü der PDF-Ansicht. Kein revokeObjectURL (s. form.js).
     const blob = new Blob([current.pdf.bytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { } }, 60000);
   });
 
   // ---------- Start: letzten Vorgang laden oder neuen anlegen ----------

@@ -890,30 +890,19 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
         document.dispatchEvent(new CustomEvent('abnahme:pdf', { detail: { bytes: pdfBytes, filename } }));
       } catch (e) { }
 
-      // Bevorzugt das iOS-Teilen-Menü (Drucken / In Dateien sichern / Mail):
-      // die App bleibt dabei im Vordergrund und navigiert nicht zur PDF weg.
-      let ausgeliefert = false;
-      try {
-        const file = new File([pdfBytes], filename, { type: 'application/pdf' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: filename });
-          ausgeliefert = true;
-        }
-      } catch (e) {
-        // AbortError = Nutzer hat das Teilen-Menü bewusst geschlossen -> kein Zwangs-Download
-        if (e && e.name === 'AbortError') ausgeliefert = true;
-      }
-
-      if (!ausgeliefert) {
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click(); a.remove();
-        // Spät freigeben: falls Safari die PDF im selben Tab öffnet, muss die
-        // URL beim Zurückgehen noch gültig sein
-        setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { } }, 60000);
-      }
+      // PDF direkt anzeigen/herunterladen (Mitarbeiter-Entscheidung Juli 2026):
+      // Safari zeigt die PDF in ganzer Ansicht; gespeichert und unterschrieben
+      // wird über das Teilen-Menü der PDF-Ansicht (Apple Dateien + Markierung).
+      // Der Formularstand ist davor gesichert; autocomplete="off" + der
+      // pageshow-Handler in records.js verhindern Datenverlust beim Zurückgehen.
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      // Bewusst KEIN revokeObjectURL: Safari muss die URL auch beim späteren
+      // Teilen aus der PDF-Ansicht noch auflösen können; der Speicher wird
+      // beim nächsten Seitenwechsel automatisch freigegeben.
     } catch (err) {
       console.error('PDF-Fehler:', err);
       alert('PDF-Erstellung fehlgeschlagen. Siehe Konsole für Details.');
