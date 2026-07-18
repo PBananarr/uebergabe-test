@@ -68,8 +68,11 @@
       <div class="no-print" style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
         <!-- <button type="button" id="save-btn" class="submit-btn">Speichern</button> -->
         <button type="button" id="pdf-btn">Als PDF erzeugen</button>
-        <button type="button" id="reset-btn">Zurücksetzen</button>
+        <!-- remove-btn: destruktive Aktion rot und rechts abgesetzt (Fehltipp-Schutz) -->
+        <button type="button" id="reset-btn" class="remove-btn">Zurücksetzen</button>
       </div>
+      <p class="pdf-hint no-print">Die PDF wird nach dem Erzeugen angezeigt – dort über „Teilen“
+        in <em>Dateien</em> sichern und unterschreiben.</p>
     </form>
 
     <div id="submitted" class="submitted-data" style="display:none;"></div>

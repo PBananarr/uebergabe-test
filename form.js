@@ -19,9 +19,51 @@
   // Strukturänderungen (Zeile hinzugefügt/entfernt, Reset) an records.js melden -> Autosave
   const notifyChanged = () => document.dispatchEvent(new CustomEvent('abnahme:changed'));
 
+  // Neue Zeile in Sicht bringen und erstes Feld fokussieren (öffnet die iPad-Tastatur)
+  const focusFirstField = (rowEl) => {
+    const first = rowEl.querySelector('input:not([type="checkbox"]), textarea, select');
+    try { rowEl.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { }
+    if (first) first.focus({ preventScroll: true });
+  };
+
+  // Zeile entfernen; enthält sie bereits Eingaben, vorher rückfragen (Fehlertoleranz).
+  // Checkboxen/Selects zählen nicht als Eingabe (haben immer einen Standardwert).
+  const confirmRemove = (rowEl) => {
+    const hasContent = [...rowEl.querySelectorAll('input, textarea')].some(inp =>
+      inp.type !== 'checkbox' && inp.value.trim() !== '');
+    if (hasContent && !confirm('Diese Zeile enthält bereits Eingaben. Wirklich entfernen?')) return;
+    rowEl.remove();
+    notifyChanged();
+  };
+
+  // Datum ist praktisch immer "heute": leeres Datumsfeld vorbelegen (änderbar)
+  const ensureDefaultDatum = () => {
+    const inp = form.querySelector('input[name="datum"]');
+    if (inp && !inp.value) {
+      const d = new Date();
+      inp.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  };
+
+  // Return-Taste springt zum nächsten Feld (in Textareas bleibt Enter = Zeilenumbruch)
+  form.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const t = e.target;
+    if (!t || t.tagName !== 'INPUT' || t.type === 'checkbox') return;
+    e.preventDefault();
+    const fields = [...form.querySelectorAll('input, select, textarea')]
+      .filter(x => !x.disabled && x.type !== 'checkbox' && x.offsetParent !== null);
+    const next = fields[fields.indexOf(t) + 1];
+    if (next) next.focus();
+    else t.blur();
+  });
+
   // iPad-/Tastatur-Hilfen + dezimale Eingaben
   const applyInputHints = (input, name, type) => {
     const nm = String(name || '').toLowerCase();
+
+    // Return-Taste zeigt auf der iPad-Tastatur "Weiter" (springt zum nächsten Feld)
+    if (input.tagName === 'INPUT') input.enterKeyHint = 'next';
 
     const isDecimal =
       /betrag|summe|rate|eur|stand/.test(nm) ||             // generisch: *betrag, *summe, *rate, *eur, *stand
@@ -120,10 +162,16 @@
     addBtn.setAttribute('aria-label', 'Feld hinzufügen');
     addBtn.dataset.section = String(idx);
 
+    const bulkBtn = el('button', 'bulk-btn');
+    bulkBtn.type = 'button';
+    bulkBtn.textContent = 'Mehrere hinzufügen';
+    bulkBtn.title = 'Mehrere Einträge auf einmal per Checkliste hinzufügen';
+
     wrap.appendChild(sel);
     wrap.appendChild(addBtn);
+    wrap.appendChild(bulkBtn);
 
-    return { ui: wrap, select: sel, addBtn };
+    return { ui: wrap, select: sel, addBtn, bulkBtn };
   };
 
   const makeRemoveBtn = (onRemove) => {
@@ -166,7 +214,7 @@
       strong.id = uid('lbl');
       head.appendChild(strong);
 
-      head.appendChild(makeRemoveBtn(() => { card.remove(); notifyChanged(); }));
+      head.appendChild(makeRemoveBtn(() => confirmRemove(card)));
       card.appendChild(head);
 
       (opt.fields || opt.subfields || []).forEach(f => {
@@ -222,7 +270,7 @@
         group.appendChild(input);
       });
 
-      group.appendChild(makeRemoveBtn(() => { group.remove(); notifyChanged(); }));
+      group.appendChild(makeRemoveBtn(() => confirmRemove(group)));
       container.appendChild(group);
       return group;
     }
@@ -245,9 +293,72 @@
     applyInputHints(input, input.name, input.type);
     row.appendChild(input);
 
-    row.appendChild(makeRemoveBtn(() => { row.remove(); notifyChanged(); }));
+    row.appendChild(makeRemoveBtn(() => confirmRemove(row)));
     container.appendChild(row);
     return row;
+  };
+
+  // ---------- Sammel-Hinzufügen: mehrere Zeilen auf einmal per Checkliste ----------
+  let bulkOverlay = null;
+  const openBulkDialog = (sectionIdx) => {
+    const section = sections[sectionIdx];
+    if (!section || !Array.isArray(section.options)) return;
+
+    if (bulkOverlay) bulkOverlay.remove();
+    bulkOverlay = el('div', 'sig-overlay no-print');
+
+    const dialog = el('div', 'sig-dialog');
+
+    const h2 = document.createElement('h2');
+    h2.textContent = section.title || 'Mehrere hinzufügen';
+    dialog.appendChild(h2);
+
+    const hint = el('p', 'sig-hint');
+    hint.textContent = 'Gewünschte Einträge ankreuzen – alle werden gemeinsam als leere Zeilen hinzugefügt.';
+    dialog.appendChild(hint);
+
+    const list = el('div', 'bulk-list');
+    section.options.forEach(opt => {
+      const lab = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = opt.name;
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(' ' + opt.label));
+      list.appendChild(lab);
+    });
+    dialog.appendChild(list);
+
+    const close = () => { bulkOverlay?.remove(); bulkOverlay = null; };
+
+    const actions = el('div', 'sig-actions');
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Abbrechen';
+    cancel.addEventListener('click', close);
+
+    const ok = el('button', 'submit-btn');
+    ok.type = 'button';
+    ok.textContent = 'Hinzufügen';
+    ok.addEventListener('click', () => {
+      const chosen = [...list.querySelectorAll('input:checked')].map(c => c.value);
+      close();
+      if (!chosen.length) return;
+      let firstRow = null;
+      chosen.forEach(name => {
+        const r = buildDynamicRow(sectionIdx, name);
+        if (r && !firstRow) firstRow = r;
+      });
+      notifyChanged();
+      if (firstRow) focusFirstField(firstRow);
+    });
+
+    actions.appendChild(cancel);
+    actions.appendChild(ok);
+    dialog.appendChild(actions);
+
+    bulkOverlay.appendChild(dialog);
+    document.body.appendChild(bulkOverlay);
   };
 
   // ---------- Rendering ----------
@@ -266,19 +377,34 @@
     // Dynamische Optionen
     if (Array.isArray(section.options) && section.options.length) {
       const controls = makeAddFieldUI(section, i) || {};
-      const { ui, select, addBtn } = controls;
+      const { ui, select, addBtn, bulkBtn } = controls;
       const container = el('div');
       container.id = `fields-container-${i}`;
 
-      if (ui) root.appendChild(ui);
+      // Liste zuerst, Auswahl darunter: der "+"-Knopf steht so immer direkt
+      // unter der zuletzt hinzugefügten Zeile (kein Hochscrollen mehr nötig)
       root.appendChild(container);
+
+      const emptyHint = el('p', 'empty-hint');
+      emptyHint.textContent = 'Noch nichts erfasst – unten auswählen und mit „+“ hinzufügen.';
+      root.appendChild(emptyHint);
+
+      if (ui) root.appendChild(ui);
 
       if (addBtn) {
         addBtn.addEventListener('click', () => {
           if (!select.value) return;
-          if (buildDynamicRow(i, select.value)) notifyChanged();
+          const row = buildDynamicRow(i, select.value);
+          if (row) {
+            notifyChanged();
+            focusFirstField(row);
+          }
           select.value = '';
         });
+      }
+
+      if (bulkBtn) {
+        bulkBtn.addEventListener('click', () => openBulkDialog(i));
       }
     }
   });
@@ -383,6 +509,7 @@
     form.querySelector('#maengel_dynamic_wrap')?.remove();
     form.querySelector('#kaution_rate_wrap')?.remove();
     if (out) out.style.display = 'none';
+    ensureDefaultDatum();
   };
 
   const serializeState = () => {
@@ -441,6 +568,8 @@
       if (inp.type === 'checkbox') inp.checked = arr[idx] === 'on';
       else inp.value = arr[idx];
     });
+
+    ensureDefaultDatum();
   };
 
   // API für records.js (automatische Zwischenspeicherung + Vorgangsverwaltung)
@@ -450,12 +579,67 @@
     clearForm: clearFormState
   };
 
+  // Falls records.js nicht lädt: Datum trotzdem vorbelegen
+  ensureDefaultDatum();
+
   // ---------- Reset ----------
   document.getElementById('reset-btn')?.addEventListener('click', () => {
     if (!confirm('Alle Eingaben löschen?')) return;
     clearFormState();
     notifyChanged();
   });
+
+  // ---------- Schnellnavigation: Abschnitts-Sprungmenü + "nach oben" ----------
+  (function setupQuickNav() {
+    const headings = [...root.querySelectorAll('h2')];
+    if (!headings.length) return;
+
+    const nav = el('div', 'quick-nav no-print');
+
+    const menu = el('div', 'quick-nav-menu');
+    menu.style.display = 'none';
+    headings.forEach(h => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = h.textContent;
+      b.addEventListener('click', () => {
+        menu.style.display = 'none';
+        h.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+      menu.appendChild(b);
+    });
+
+    const menuBtn = el('button', 'quick-nav-btn');
+    menuBtn.type = 'button';
+    menuBtn.textContent = '≡';
+    menuBtn.title = 'Zu Abschnitt springen';
+    menuBtn.setAttribute('aria-label', 'Zu Abschnitt springen');
+    menuBtn.addEventListener('click', () => {
+      menu.style.display = menu.style.display === 'none' ? '' : 'none';
+    });
+
+    const topBtn = el('button', 'quick-nav-btn');
+    topBtn.type = 'button';
+    topBtn.textContent = '▲';
+    topBtn.title = 'Zum Seitenanfang';
+    topBtn.setAttribute('aria-label', 'Zum Seitenanfang');
+    topBtn.addEventListener('click', () => {
+      menu.style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    nav.appendChild(menu);
+    nav.appendChild(menuBtn);
+    nav.appendChild(topBtn);
+    document.body.appendChild(nav);
+
+    // Menü schließen, wenn außerhalb getippt wird
+    document.addEventListener('pointerdown', (e) => {
+      if (menu.style.display !== 'none' && !nav.contains(e.target)) {
+        menu.style.display = 'none';
+      }
+    });
+  })();
 
   // ---------- Echte PDF mit pdf-lib (SAFE MODE) ----------
   document.getElementById('pdf-btn')?.addEventListener('click', async () => {
@@ -494,6 +678,19 @@ Bei Verlust und Neuausstellung wird eine Gebühr in Höhe von 25,00 EUR zzgl. Mw
       const isOn = x => asStr(x).toLowerCase() === 'on';
       const isISO = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
       const toDE = s => (isISO(s = asStr(s))) ? s.split('-').reverse().join('.') : s;
+
+      // ---------- Vollständigkeits-Hinweis (nur Hinweis, kein Zwang) ----------
+      const allgemein = sections.find(s => s.title === 'Allgemeine Daten');
+      const fehlende = (allgemein?.fields || [])
+        .filter(f => !asStr(data[f.name]))
+        .map(f => '– ' + f.label);
+      if (fehlende.length) {
+        const weiter = confirm(
+          'Hinweis – folgende Angaben sind noch leer:\n\n' + fehlende.join('\n') +
+          '\n\nTrotzdem PDF erzeugen?'
+        );
+        if (!weiter) return;
+      }
 
       // PDF + Standardfonts (keine externen Font/Logo-Loads)
       const pdf = await PDFDocument.create();

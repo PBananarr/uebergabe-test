@@ -117,6 +117,12 @@
   btnNew.id = 'record-new';
   btnNew.textContent = 'Neue Übergabe';
 
+  const btnDup = document.createElement('button');
+  btnDup.type = 'button';
+  btnDup.id = 'record-duplicate';
+  btnDup.textContent = 'Duplizieren';
+  btnDup.title = 'Neue Übergabe mit Adresse, Zählernummern und Ausstattung dieses Vorgangs anlegen – Stände, Namen und Mängel bleiben leer';
+
   const btnPdf = document.createElement('button');
   btnPdf.type = 'button';
   btnPdf.id = 'record-pdf';
@@ -136,6 +142,7 @@
   bar.appendChild(barLabel);
   bar.appendChild(sel);
   bar.appendChild(btnNew);
+  bar.appendChild(btnDup);
   bar.appendChild(btnPdf);
   bar.appendChild(btnDelete);
   bar.appendChild(status);
@@ -238,6 +245,43 @@
     current = rec;
     rebuildSelect();
     activate(rec);
+  });
+
+  // ---------- Vorgang duplizieren (Wohnungs-Stammdaten übernehmen) ----------
+  // Übernommen werden: Adresse, alle Zähler-/Schlüsselnummern, Boden-/Wandarten
+  // und die hinzugefügten Zeilen. Alles Vorgangsbezogene (Datum, Namen, Stände,
+  // Mängel, Anmerkungen, Kaution) startet leer.
+  const templateFrom = (rec) => {
+    const KEEP_EXACT = ['wohnung_nr_etage_objekt', 'strasse_hausnummer', 'plz_ort'];
+    const keepName = (n) =>
+      KEEP_EXACT.includes(n) ||
+      /(_nr|_nummer)$/.test(n) ||
+      /^(boden_|boeden_|waende_)/.test(n);
+
+    const src = (rec.state && rec.state.values) ? rec.state.values : {};
+    const values = {};
+    Object.keys(src).forEach(n => {
+      if (keepName(n) && Array.isArray(src[n])) values[n] = src[n].slice();
+    });
+
+    const dynamic = (rec.state && Array.isArray(rec.state.dynamic))
+      ? rec.state.dynamic.map(d => ({ section: d.section, option: d.option }))
+      : [];
+
+    return { dynamic, values };
+  };
+
+  btnDup.addEventListener('click', async () => {
+    if (!current) return;
+    await flushSave();
+    const rec = makeRecord();
+    rec.state = templateFrom(current);
+    records.unshift(rec);
+    try { await putRecord(rec); } catch (e) { console.error(e); }
+    current = rec;
+    rebuildSelect();
+    activate(rec);
+    setStatus('Vorgang dupliziert – Nummern/Ausstattung übernommen, Stände und Namen sind leer.');
   });
 
   btnDelete.addEventListener('click', async () => {
